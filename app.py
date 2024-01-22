@@ -1,4 +1,6 @@
 """
+Cannie
+
 「教養」から6単位以上を修得すること。
 「言語」から1外国語4単位(必修)以上を修得すること。
 
@@ -18,6 +20,7 @@ import streamlit as st
 from pydantic import BaseModel
 from typing import List
 from enum import Enum
+
 
 class Course(BaseModel):
     """コース選択によって科目群が変わる"""
@@ -174,16 +177,16 @@ def autoselect_basics(A: bool, A2: bool, B:bool, B2:bool):
     →基礎ゼミをどちらに充当するかを選ぶ必要がある 場合にのみユーザーに選択させる
     """
     # どちらか一方がはじめから条件を満たしているなら他方に基礎ゼミを加算
-    if A & (not B):
+    if A and (not B):
         return (A, B2)
-    elif (not A) & B:
+    elif (not A) and B:
         return (A2, B)
         
     # 加算前にはいずれも条件を満たしておらず、
-    elif (not A) & (not B):
+    elif (not A) and (not B):
         # 基礎ゼミの加算によっていずれも条件を満たすなら
         # どちらの条件を満たしたいかユーザーに選ばせる
-        if A2 & B2: 
+        if A2 and B2: 
             selected_elective = "**選択必修科目に加算する**"
             selected_semi = "**演習科目に加算する**"
             choice = st.sidebar.radio("❓ **基礎科目を…**",
@@ -199,17 +202,17 @@ def autoselect_basics(A: bool, A2: bool, B:bool, B2:bool):
                 return (A2, B)
         # 加算によってどちらか一方のみが条件を満たすなら、
         # 自動的にそれを選ぶ
-        elif (not A) & B2:
+        elif (not A) and B2:
             return (A, B2)
-        elif A2 & (not B):
+        elif A2 and (not B):
             return (A2, B)
         
         # 基礎ゼミを加算しても、いずれも条件を満たさないときな、
         # 便宜的にAに加算する
-        elif (not A2) & (not B2):
+        elif (not A2) and (not B2):
             return (A2, B)
         else:
-            KeyError
+            raise KeyError
 
 
 def judge(category: Unit):
@@ -267,6 +270,17 @@ def add_course(elective: Shortage, course: Shortage, basics: Basics) -> (int, in
     ele = elective.unit + add_basics
     cou = course.unit + add_basics
     return (ele, cou)
+
+
+def update_judge(units: Units, A: bool, B: bool):
+    """"
+    A, B に基づいて条件判定を更新する
+    A: コース科目の新しい条件
+    B: 演習科目の新しい条件
+    """
+    units.elective.is_okay = A
+    units.course_subjects.is_okay = A
+    units.other_seminar.is_okay = B
 
 
 def metric(category: Unit):
@@ -420,6 +434,7 @@ judge(units.all_subjects)
 # 不足単位の充当または代替の計算
 ################################
 
+# 不足している可能性がある科目
 ele = Shortage(**gen_shortage(units.elective))
 cou_shortage = Shortage(**gen_shortage(units.course_subjects))
 semi = Shortage(**gen_shortage(units.other_seminar))
@@ -440,53 +455,44 @@ basics = Basics(
     choice="not_selected"
     )
 
-# まずはworkshop, コース科目、コース外科目を加算
+# A: コース科目で不足が生じているかどうか
+# 過不足を調整した結果、条件を満たせば非負になる
+A = (ele.unit >= 0) & (cou_shortage.unit >= 0)
+
+# B: workshop, コース科目、コース外科目を演習科目に加算したのち、不足があるか否か
 # (この段階では基礎科目は加算しない, basics.choice is not selected)
 result = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
+B = result >= 0
 
-# 過不足を調整した結果、条件を満たせば非負になる
-cond_semi = result >= 0
-cond_ele = ele.unit >= 0
-cond_course = cou_shortage.unit >=0
+# A2: 基礎ゼミを選択必修の方に加算した場合
+basics.choice = "course"
+(val1, val2) = add_course(elective=ele, course=cou_shortage, basics=basics)
+A2 = (val1 >= 0) & (val2 >= 0)
 
-# A: コース科目・選択必修科目, B: 演習科目
-A = cond_ele & cond_course
-B = cond_semi
-
+# 基礎ゼミを演習科目に加算した場合
+basics.choice = "seminar"
+val = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
+B2 = val >= 0
 
 # 条件を満たしているなら基礎ゼミは加算しない
 if A & B:
     pass 
-
 # 条件を満たしていなくても、基礎ゼミに余剰がなければ考慮しない
 elif basics.unit == 0:
     pass
-
 # そうでなければ、ゼミと選択必修のそれぞれに基礎ゼミを加算してみて、
 # どちらの状況で得をするかシミュレーションする
 else:
-    # ゼミの方を加算
-    basics.choice = "seminar"
-    result2 = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
-    B2 = result2 >= 0
-
-    # 選択必修の方を加算
-    basics.choice = "course"
-    (ele2, course2) = add_course(elective=ele, course=cou_shortage, basics=basics)
-    cond_ele2 = ele2 >= 0
-    cond_course2 = course2 >= 0
-    A2 = cond_ele2 & cond_course2
-
     (newA, newB) = autoselect_basics(A, A2, B, B2)
-    # newAがfalseのときは元のままでOK
+    # newAがfalse(負)のときは元のままでOK
+    # Trueのときのみ更新する
+    # コース科目・選択必修のうちいずれかがTrueの場合を考慮
     if newA:
         A = newA
     B = newB
 
 # 条件判定の更新
-units.elective.is_okay = A
-units.course_subjects.is_okay = A
-units.other_seminar.is_okay = B
+update_judge(units, A, B)
 
 
 # 条件を満たした数を集計
@@ -510,7 +516,6 @@ if achievements == 10:
     st.sidebar.markdown("## " + label +  " 🎉🎉🎉")
 else:
     st.sidebar.markdown(label)
-
 
 # サイドバーに条件達成状況を表示
 metric(units.all_subjects)
