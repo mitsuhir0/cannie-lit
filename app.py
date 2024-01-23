@@ -16,6 +16,7 @@ Cannie
 「フレッシュマンゼミナールＡ」「フレッシュマンゼミナールＢ」の各2単位合計4単位は必修とする。
 残り12単位は、基礎科目・コース科目・コース外科目の単位で上限8単位まで、ワークショップの単位で上限8単位までの単位で代替できる。
 """
+import json
 import streamlit as st
 from pydantic import BaseModel
 from typing import List
@@ -326,7 +327,10 @@ units = Units(
 )
 
 # コース別科目一覧を読み込み
-model = DataModel.parse_file('./data.json')
+with open('./data.json', 'r') as f:
+    json_data = json.load(f)
+
+model = DataModel.model_validate(json_data)
 
 # その他の科目用データの作成
 l = []
