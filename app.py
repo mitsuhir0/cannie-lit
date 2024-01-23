@@ -19,7 +19,6 @@ Cannie
 import json
 import streamlit as st
 from pydantic import BaseModel
-from typing import List
 from enum import Enum
 
 
@@ -27,21 +26,21 @@ class Course(BaseModel):
     """コース選択によって科目群が変わる"""
     id: int
     name: str
-    required: List[str]
-    elective: List[str]
-    course_subjects: List[str]
-    other_subjects: List[str]
+    required: list[str]
+    elective: list[str]
+    course_subjects: list[str]
+    other_subjects: list[str]
 
 
 class DataModel(BaseModel):
     """json読み込み用データ
     コース選択によって変わるものとコース共通のもの
     """
-    courses: List[Course]
-    basics: List[str]
-    freshman_seminar: List[str]
-    other_seminar: List[str]
-    other_categories: List[str]
+    courses: list[Course]
+    basics: list[str]
+    freshman_seminar: list[str]
+    other_seminar: list[str]
+    other_categories: list[str]
 
 
 class Unit(BaseModel):
@@ -98,7 +97,7 @@ class OtherSubjects(BaseModel):
     units.other_categories と対応
     """
     name: str
-    subjects: List[OtherSubject]
+    subjects: list[OtherSubject]
 
 
 class Choice(str, Enum):
