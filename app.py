@@ -116,10 +116,10 @@ class Choise(str, Enum):
 
 class Basics(BaseModel):
     """
-    基礎ゼミナール専用モデル
+    基礎科目専用モデル
     ここでの unit は修得単位数でなく 超過分 (>= 0) である
     """
-    name: str = "基礎ゼミナール"
+    name: str = "基礎科目"
     unit: int
     choice: Choise = "not_selected"
 
@@ -138,7 +138,7 @@ class Surplus(BaseModel):
     """
     不足単位数の計算に用いるデータ型
     unit は 充当(代替)可能な単位数
-    基礎ゼミナールは専用型を持つ。ここではワークショップ、コース科目、コース外科目が相当
+    基礎科目は専用型を持つ。ここではワークショップ、コース科目、コース外科目が相当
     ※ コース科目は不足・超過両方の可能性がある
     """
     name: str
@@ -167,17 +167,17 @@ def gen_surplus(unit: Unit) -> dict:
 
 def autoselect_basics(A: bool, A2: bool, B:bool, B2:bool):
     """
-    基礎ゼミをコース科目と演習科目のどちらに充当すべきかを自動判定
+    基礎科目をコース科目と演習科目のどちらに充当すべきかを自動判定
 
     A: コース科目の元の条件
     A2: コース科目の基礎科目充当後の条件
     B: 演習科目の元の条件
     B2: 演習科目の基礎科目充当後の条件
 
-    コース科目と演習科目のどちらも不足していて、基礎ゼミの充当によってどちらも条件を満たす
-    →基礎ゼミをどちらに充当するかを選ぶ必要がある 場合にのみユーザーに選択させる
+    コース科目と演習科目のどちらも不足していて、基礎科目の充当によってどちらも条件を満たす
+    →基礎科目をどちらに充当するかを選ぶ必要がある 場合にのみユーザーに選択させる
     """
-    # どちらか一方がはじめから条件を満たしているなら他方に基礎ゼミを加算
+    # どちらか一方がはじめから条件を満たしているなら他方に基礎科目を加算
     if A and (not B):
         return (A, B2)
     elif (not A) and B:
@@ -185,7 +185,7 @@ def autoselect_basics(A: bool, A2: bool, B:bool, B2:bool):
         
     # 加算前にはいずれも条件を満たしておらず、
     elif (not A) and (not B):
-        # 基礎ゼミの加算によっていずれも条件を満たすなら
+        # 基礎科目の加算によっていずれも条件を満たすなら
         # どちらの条件を満たしたいかユーザーに選ばせる
         if A2 and B2: 
             selected_elective = "**選択必修科目に加算する**"
@@ -208,7 +208,7 @@ def autoselect_basics(A: bool, A2: bool, B:bool, B2:bool):
         elif A2 and (not B):
             return (A2, B)
         
-        # 基礎ゼミを加算しても、いずれも条件を満たさないときな、
+        # 基礎科目を加算しても、いずれも条件を満たさないときな、
         # 便宜的にAに加算する
         elif (not A2) and (not B2):
             return (A2, B)
@@ -468,23 +468,23 @@ A = (ele.unit >= 0) & (cou_shortage.unit >= 0)
 result = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
 B = result >= 0
 
-# A2: 基礎ゼミを選択必修の方に加算した場合
+# A2: 基礎科目を選択必修の方に加算した場合
 basics.choice = "course"
 (val1, val2) = add_course(elective=ele, course=cou_shortage, basics=basics)
 A2 = (val1 >= 0) & (val2 >= 0)
 
-# 基礎ゼミを演習科目に加算した場合
+# 基礎科目を演習科目に加算した場合
 basics.choice = "seminar"
 val = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
 B2 = val >= 0
 
-# 条件を満たしているなら基礎ゼミは加算しない
+# 条件を満たしているなら基礎科目は加算しない
 if A & B:
     pass 
-# 条件を満たしていなくても、基礎ゼミに余剰がなければ考慮しない
+# 条件を満たしていなくても、基礎科目に余剰がなければ考慮しない
 elif basics.unit == 0:
     pass
-# そうでなければ、ゼミと選択必修のそれぞれに基礎ゼミを加算してみて、
+# そうでなければ、ゼミと選択必修のそれぞれに基礎科目を加算してみて、
 # どちらの状況で得をするかシミュレーションする
 else:
     (newA, newB) = autoselect_basics(A, A2, B, B2)
