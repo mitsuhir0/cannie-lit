@@ -101,7 +101,7 @@ class OtherSubjects(BaseModel):
     subjects: List[OtherSubject]
 
 
-class Choise(str, Enum):
+class Choice(str, Enum):
     """
     > 基礎科目
     > 規定の単位数を超えて修得した場合は、コース科目の選択必修科目の単位数に充当できる。
@@ -121,7 +121,7 @@ class Basics(BaseModel):
     """
     name: str = "基礎科目"
     unit: int
-    choice: Choise = "not_selected"
+    choice: Choice = "not_selected"
 
 
 class Shortage(BaseModel):
@@ -165,55 +165,61 @@ def gen_surplus(unit: Unit) -> dict:
     }
 
 
-def autoselect_basics(A: bool, A2: bool, B:bool, B2:bool):
+def update_ACB(A: bool, C: bool, B: bool, A2: bool, C2: bool, B2: bool) -> Choice:
     """
-    基礎科目をコース科目と演習科目のどちらに充当すべきかを自動判定
-
-    A: コース科目の元の条件
-    A2: コース科目の基礎科目充当後の条件
-    B: 演習科目の元の条件
-    B2: 演習科目の基礎科目充当後の条件
-
-    コース科目と演習科目のどちらも不足していて、基礎科目の充当によってどちらも条件を満たす
-    →基礎科目をどちらに充当するかを選ぶ必要がある 場合にのみユーザーに選択させる
+    A が True のときは自動的に C もTrueになるが逆はそうではない
+    なので C, Bを先に比較して後からA, Cを比較する
+    ロジックはC, BもA, B も同じ
     """
-    # どちらか一方がはじめから条件を満たしているなら他方に基礎科目を加算
-    if A and (not B):
-        return (A, B2)
-    elif (not A) and B:
-        return (A2, B)
-        
-    # 加算前にはいずれも条件を満たしておらず、
-    elif (not A) and (not B):
-        # 基礎科目の加算によっていずれも条件を満たすなら
-        # どちらの条件を満たしたいかユーザーに選ばせる
-        if A2 and B2: 
-            selected_elective = "**選択必修科目に加算する**"
-            selected_semi = "**演習科目に加算する**"
-            choice = st.sidebar.radio("❓ **基礎科目を…**",
-                          [
-                              selected_elective,
-                              selected_semi
-                              ])
-            if choice is selected_elective:
-                return (A2, B)
-            elif choice is selected_semi:
-                return (A, B2)
-            else: 
-                return (A2, B)
-        # 加算によってどちらか一方のみが条件を満たすなら、
-        # 自動的にそれを選ぶ
-        elif (not A) and B2:
-            return (A, B2)
-        elif A2 and (not B):
-            return (A2, B)
-        
-        # 基礎科目を加算しても、いずれも条件を満たさないときな、
-        # 便宜的にAに加算する
-        elif (not A2) and (not B2):
-            return (A2, B)
-        else:
-            raise KeyError
+    if A is True:
+        match (C, B, C2, B2):
+            case (True, True, _, _):            # 元から満たしているなら
+                return Choice("not_selected")                     # アップデートしない
+            case (True, False, _, _):           # どちらかが満たしていないなら
+                return Choice("seminar")                  # 満たしていない方をアップデート
+            case (False, True, _, _):
+                return Choice("course")
+            case (False, False, True, False):   # どちらも満たしてなくて、アップデートによりどちらかが満たすなら
+                return Choice("course")                  # そちらをアップデート
+            case (False, False, False, True):
+                return Choice("seminar")
+            case (False, False, False, False):  # どちらも満たしていなくて、アップデートによっても満たさないなら
+                return Choice("not_selected")            
+            case (False, False, True, True):    # どちらも満たしていなくて、アップデートによりいずれも満たすなら
+                return select_basics()
+            
+    conditions = (A, B, A2, B2)
+    match conditions:                   
+        case (True, True, _, _):            # 元から満たしているなら
+            return Choice("not_selected")                     # アップデートしない
+        case (True, False, _, _):           # どちらかが満たしていないなら
+            return Choice("seminar")                  # 満たしていない方をアップデート
+        case (False, True, _, _):
+            return Choice("course")
+        case (False, False, True, False):   # どちらも満たしてなくて、アップデートによりどちらかが満たすなら
+            return Choice("course")                  # そちらをアップデート
+        case (False, False, False, True):
+            return Choice("seminar")
+        case (False, False, False, False):  # どちらも満たしていなくて、アップデートによっても満たさないなら
+            return Choice("not_selected")            
+        case (False, False, True, True):    # どちらも満たしていなくて、アップデートによりいずれも満たすなら
+            return select_basics()
+
+
+def select_basics() -> Choice:
+    selected_elective = "**選択必修科目に加算する**"
+    selected_semi = "**演習科目に加算する**"
+    choice = st.sidebar.radio("❓ **基礎科目を…**",
+                  [
+                      selected_elective,
+                      selected_semi
+                      ])
+    if choice is selected_elective:
+        return Choice("course")
+    elif choice is selected_semi:
+        return Choice("seminar")
+    else: 
+        return Choice("not_selected")
 
 
 def judge(category: Unit):
@@ -228,7 +234,7 @@ def judge(category: Unit):
         category.is_okay = False
 
 
-def add_semi(semi: Shortage, other: Surplus, course: Surplus, workshop: Surplus, basics: Basics) -> int:
+def add_semi(seminar: Shortage, other: Surplus, course: Surplus, workshop: Surplus, basics: Basics) -> int:
     """
     > 演習科目
     > 残り12単位は、基礎科目・コース科目・コース外科目の単位で上限8単位まで、
@@ -246,7 +252,7 @@ def add_semi(semi: Shortage, other: Surplus, course: Surplus, workshop: Surplus,
         KeyError
 
     result = (
-        semi.unit
+        seminar.unit
         + min(add_basics + course.unit + other.unit, 8) # 上限8単位
         + min(workshop.unit, 8) # 上限8単位
     )
@@ -268,19 +274,20 @@ def add_course(elective: Shortage, course: Shortage, basics: Basics) -> (int, in
     else:
         KeyError
 
-    ele = elective.unit + add_basics
-    cou = course.unit + add_basics
-    return (ele, cou)
+    unit_elective = elective.unit + add_basics
+    unit_course = course.unit + add_basics
+    return (unit_elective, unit_course)
 
 
-def update_judge(units: Units, A: bool, B: bool):
+def update_judge(units: Units, A: bool, C: bool, B: bool):
     """"
-    A, B に基づいて条件判定を更新する
-    A: コース科目の新しい条件
+    A, C, B に基づいて条件判定を更新する
+    A: 選択必修科目の新しい条件
+    C: コース科目の新しい条件
     B: 演習科目の新しい条件
     """
     units.elective.is_okay = A
-    units.course_subjects.is_okay = A
+    units.course_subjects.is_okay = C
     units.other_seminar.is_okay = B
 
 
@@ -439,64 +446,92 @@ judge(units.all_subjects)
 ################################
 
 # 不足している可能性がある科目
-ele = Shortage(**gen_shortage(units.elective))
-cou_shortage = Shortage(**gen_shortage(units.course_subjects))
-semi = Shortage(**gen_shortage(units.other_seminar))
+shortage_elective = Shortage.model_validate(gen_shortage(units.elective))
+shortage_course = Shortage(**gen_shortage(units.course_subjects))
+shortage_seminar = Shortage(**gen_shortage(units.other_seminar))
 
 # 充当・代替に用いる科目
-cou_surplus = Surplus(**gen_surplus(units.course_subjects))
-other = Surplus(
+surplus_course = Surplus(**gen_surplus(units.course_subjects))
+surplus_other = Surplus(
     name=units.other_subjects.name,
     unit=units.other_subjects.unit
     )
-workshop = Surplus(
+surplus_workshop = Surplus(
     name=units.workshop.name,
     unit=units.workshop.unit
     )
-basics = Basics(
-    name=units.basics.name,
-    unit=max(units.basics.unit-units.basics.criteria, 0),
-    choice="not_selected"
+surplus_basics = Basics(
+    name=units.basics.name
+    , unit=max(units.basics.unit-units.basics.criteria, 0)
+    , choice="not_selected"
     )
 
-# A: コース科目で不足が生じているかどうか
+# A: 選択必修科目で不足が生じているかどうか
 # 過不足を調整した結果、条件を満たせば非負になる
-A = (ele.unit >= 0) & (cou_shortage.unit >= 0)
+A = shortage_elective.unit >= 0 
+
+# C: コース科目で不足が生じているか
+C = shortage_course.unit >= 0
 
 # B: workshop, コース科目、コース外科目を演習科目に加算したのち、不足があるか否か
 # (この段階では基礎科目は加算しない, basics.choice is not selected)
-result = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
+result = add_semi(
+    seminar=shortage_seminar
+    , other=surplus_other
+    , course=surplus_course 
+    , workshop=surplus_workshop 
+    , basics=surplus_basics
+    )
 B = result >= 0
 
 # A2: 基礎科目を選択必修の方に加算した場合
-basics.choice = "course"
-(val1, val2) = add_course(elective=ele, course=cou_shortage, basics=basics)
-A2 = (val1 >= 0) & (val2 >= 0)
+surplus_basics.choice = "course"
+(val1, val2) = add_course(
+    elective=shortage_elective
+    , course=shortage_course
+    , basics=surplus_basics
+    )
+A2 = (val1 >= 0)
+C2 = (val2 >= 0)
 
 # 基礎科目を演習科目に加算した場合
-basics.choice = "seminar"
-val = add_semi(semi=semi, other=other, course=cou_surplus, workshop=workshop, basics=basics)
-B2 = val >= 0
+surplus_basics.choice = "seminar"
+val = add_semi(
+    seminar=shortage_seminar
+    , other=surplus_other
+    , course=surplus_course
+    , workshop=surplus_workshop
+    , basics=surplus_basics
+    )
+B2 = (val >= 0)
 
-# 条件を満たしているなら基礎科目は加算しない
-if A & B:
-    pass 
-# 条件を満たしていなくても、基礎科目に余剰がなければ考慮しない
-elif basics.unit == 0:
-    pass
-# そうでなければ、ゼミと選択必修のそれぞれに基礎科目を加算してみて、
-# どちらの状況で得をするかシミュレーションする
-else:
-    (newA, newB) = autoselect_basics(A, A2, B, B2)
-    # newAがfalse(負)のときは元のままでOK
-    # Trueのときのみ更新する
-    # コース科目・選択必修のうちいずれかがTrueの場合を考慮
-    if newA:
-        A = newA
-    B = newB
+choice: Choice = update_ACB(A, C, B, A2, C2, B2) 
+message = ""
+match choice:
+    case "not_selected":
+        newA = A
+        newC = C
+        newB = B
+    case "seminar":
+        newA = A
+        newC = C
+        newB = B2
+        if B is False and B2 is True:
+            message = "※基礎科目を演習科目(ゼミ)に充当しました"
+    case "course":
+        newA = A2
+        newC = C2
+        newB = B
+        if A is False and A2 is True:
+            message = "※基礎科目を選択必修科目に充当しました"
+        if A is True and C is False and C2 is True:
+            message = "※基礎科目をコース科目に充当しました"
+
+if message != "":
+    st.sidebar.write(message)
 
 # 条件判定の更新
-update_judge(units, A, B)
+update_judge(units, newA, newC, newB)
 
 
 # 条件を満たした数を集計
