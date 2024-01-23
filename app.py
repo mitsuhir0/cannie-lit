@@ -167,37 +167,37 @@ def gen_surplus(unit: Unit) -> dict:
 
 def update_ACB(A: bool, C: bool, B: bool, A2: bool, C2: bool, B2: bool) -> Choice:
     """
-    A が True のときは自動的に C もTrueになるが逆はそうではない
-    なので C, Bを先に比較して後からA, Cを比較する
+    C, Bを先に比較して後からA, Cを比較する
     ロジックはC, BもA, B も同じ
     """
-    if A is True:
+    if A is True:                               # 選択必修は足りているけどコース科目が足りていないケース
         match (C, B, C2, B2):
             case (True, True, _, _):            # 元から満たしているなら
-                return Choice("not_selected")                     # アップデートしない
+                return Choice("not_selected")   # アップデートしない
             case (True, False, _, _):           # どちらかが満たしていないなら
-                return Choice("seminar")                  # 満たしていない方をアップデート
+                return Choice("seminar")        # 満たしていない方をアップデート
             case (False, True, _, _):
                 return Choice("course")
             case (False, False, True, False):   # どちらも満たしてなくて、アップデートによりどちらかが満たすなら
-                return Choice("course")                  # そちらをアップデート
+                return Choice("course")         # そちらをアップデート
             case (False, False, False, True):
                 return Choice("seminar")
             case (False, False, False, False):  # どちらも満たしていなくて、アップデートによっても満たさないなら
                 return Choice("not_selected")            
             case (False, False, True, True):    # どちらも満たしていなくて、アップデートによりいずれも満たすなら
                 return select_basics()
+
             
     conditions = (A, B, A2, B2)
     match conditions:                   
         case (True, True, _, _):            # 元から満たしているなら
-            return Choice("not_selected")                     # アップデートしない
+            return Choice("not_selected")   # アップデートしない
         case (True, False, _, _):           # どちらかが満たしていないなら
-            return Choice("seminar")                  # 満たしていない方をアップデート
+            return Choice("seminar")        # 満たしていない方をアップデート
         case (False, True, _, _):
             return Choice("course")
         case (False, False, True, False):   # どちらも満たしてなくて、アップデートによりどちらかが満たすなら
-            return Choice("course")                  # そちらをアップデート
+            return Choice("course")         # そちらをアップデート
         case (False, False, False, True):
             return Choice("seminar")
         case (False, False, False, False):  # どちらも満たしていなくて、アップデートによっても満たさないなら
