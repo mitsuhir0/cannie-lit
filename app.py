@@ -506,7 +506,6 @@ val = add_semi(
 B2 = (val >= 0)
 
 choice: Choice = update_ACB(A, C, B, A2, C2, B2) 
-message = ""
 match choice:
     case "not_selected":
         newA = A
@@ -516,19 +515,11 @@ match choice:
         newA = A
         newC = C
         newB = B2
-        if B is False and B2 is True:
-            message = "※基礎科目を演習科目(ゼミ)に充当しました"
     case "course":
         newA = A2
         newC = C2
         newB = B
-        if A is False and A2 is True:
-            message = "※基礎科目を選択必修科目に充当しました"
-        if A is True and C is False and C2 is True:
-            message = "※基礎科目をコース科目に充当しました"
 
-if message != "":
-    st.sidebar.write(message)
 
 # 条件判定の更新
 update_judge(units, newA, newC, newB)
